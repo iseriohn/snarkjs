@@ -2319,6 +2319,232 @@ async function importResponse(oldPtauFilename, contributionFilename, newPTauFile
     You should have received a copy of the GNU General Public License
     along with snarkJS. If not, see <https://www.gnu.org/licenses/>.
 */
+
+async function importResponseNoOrigin(oldPtauFilename, contributionFilename, newPTauFilename, name, importPoints, logger) {
+
+    await Blake2b__default["default"].ready();
+
+    const noHash = new Uint8Array(64);
+    for (let i=0; i<64; i++) noHash[i] = 0xFF;
+
+    const {fd: fdOld, sections} = await binFileUtils__namespace.readBinFile(oldPtauFilename, "ptau", 1);
+    const {curve, power} = await readPTauHeader(fdOld, sections);
+    const contributions = await readContributions(fdOld, curve, sections);
+    const currentContribution = {};
+
+    if (name) currentContribution.name = name;
+
+    const sG1 = curve.F1.n8*2;
+    const scG1 = curve.F1.n8; // Compresed size
+    const sG2 = curve.F2.n8*2;
+    const scG2 = curve.F2.n8; // Compresed size
+
+    const fdResponse = await fastFile__namespace.readExisting(contributionFilename);
+
+    if  (fdResponse.totalSize !=
+        64 +                            // Old Hash
+        ((2 ** power)*2-1)*scG1 +
+        (2 ** power)*scG2 +
+        (2 ** power)*scG1 +
+        (2 ** power)*scG1 +
+        scG2 +
+        sG1*6 + sG2*3)
+        throw new Error("Size of the contribution is invalid");
+
+    let lastChallengeHash;
+
+    if (contributions.length>0) {
+        lastChallengeHash = contributions[contributions.length-1].nextChallenge;
+    } else {
+        lastChallengeHash = calculateFirstChallengeHash(curve, power, logger);
+    }
+
+    const fdNew = await binFileUtils__namespace.createBinFile(newPTauFilename, "ptau", 1, importPoints ? 7: 2);
+    await writePTauHeader(fdNew, curve, power);
+
+    const contributionPreviousHash = await fdResponse.read(64);
+
+    if (hashIsEqual(noHash,lastChallengeHash)) {
+        lastChallengeHash = contributionPreviousHash;
+        contributions[contributions.length-1].nextChallenge = lastChallengeHash;
+    }
+
+    if(!hashIsEqual(contributionPreviousHash,lastChallengeHash))
+        throw new Error("Wrong contribution. this contribution is not based on the previus hash");
+
+    const hasherResponse = new Blake2b__default["default"](64);
+    hasherResponse.update(contributionPreviousHash);
+
+    const startSections = [];
+    let res;
+    res = await processSection(fdResponse, fdNew, "G1", 2, (2 ** power) * 2 -1, [1], "tauG1");
+    currentContribution.tauG1 = res[0];
+    res = await processSection(fdResponse, fdNew, "G2", 3, (2 ** power)       , [1], "tauG2");
+    currentContribution.tauG2 = res[0];
+    res = await processSection(fdResponse, fdNew, "G1", 4, (2 ** power)       , [0], "alphaG1");
+    currentContribution.alphaG1 = res[0];
+    res = await processSection(fdResponse, fdNew, "G1", 5, (2 ** power)       , [0], "betaG1");
+    currentContribution.betaG1 = res[0];
+    res = await processSection(fdResponse, fdNew, "G2", 6, 1                  , [0], "betaG2");
+    currentContribution.betaG2 = res[0];
+
+    currentContribution.partialHash = hasherResponse.getPartialHash();
+
+
+    const buffKey = await fdResponse.read(curve.F1.n8*2*6+curve.F2.n8*2*3);
+
+    currentContribution.key = fromPtauPubKeyRpr(buffKey, 0, curve, false);
+
+    hasherResponse.update(new Uint8Array(buffKey));
+    const hashResponse = hasherResponse.digest();
+
+    if (logger) logger.info(formatHash(hashResponse, "Contribution Response Hash imported: "));
+
+    if (importPoints) {
+        const nextChallengeHasher = new Blake2b__default["default"](64);
+        nextChallengeHasher.update(hashResponse);
+
+        await hashSection(nextChallengeHasher, fdNew, "G1", 2, (2 ** power) * 2 -1, "tauG1", logger);
+        await hashSection(nextChallengeHasher, fdNew, "G2", 3, (2 ** power)       , "tauG2", logger);
+        await hashSection(nextChallengeHasher, fdNew, "G1", 4, (2 ** power)       , "alphaTauG1", logger);
+        await hashSection(nextChallengeHasher, fdNew, "G1", 5, (2 ** power)       , "betaTauG1", logger);
+        await hashSection(nextChallengeHasher, fdNew, "G2", 6, 1                  , "betaG2", logger);
+
+        currentContribution.nextChallenge = nextChallengeHasher.digest();
+
+        if (logger) logger.info(formatHash(currentContribution.nextChallenge, "Next Challenge Hash: "));
+    } else {
+        currentContribution.nextChallenge = noHash;
+    }
+
+    contributions.push(currentContribution);
+
+    await writeContributions(fdNew, curve, contributions);
+
+    await fdResponse.close();
+    await fdNew.close();
+    await fdOld.close();
+
+    return currentContribution.nextChallenge;
+
+    async function processSection(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName) {
+        if (importPoints) {
+            return await processSectionImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName);
+        } else {
+            return await processSectionNoImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName);
+        }
+    }
+
+    async function processSectionImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName) {
+
+        const G = curve[groupName];
+        const scG = G.F.n8;
+        const sG = G.F.n8*2;
+
+        const singularPoints = [];
+
+        await binFileUtils__namespace.startWriteSection(fdTo, sectionId);
+        const nPointsChunk = Math.floor((1<<24)/sG);
+
+        startSections[sectionId] = fdTo.pos;
+
+        for (let i=0; i< nPoints; i += nPointsChunk) {
+            if (logger) logger.debug(`Importing ${sectionName}: ${i}/${nPoints}`);
+            const n = Math.min(nPoints-i, nPointsChunk);
+
+            const buffC = await fdFrom.read(n * scG);
+            hasherResponse.update(buffC);
+
+            const buffLEM = await G.batchCtoLEM(buffC);
+
+            await fdTo.write(buffLEM);
+            for (let j=0; j<singularPointIndexes.length; j++) {
+                const sp = singularPointIndexes[j];
+                if ((sp >=i) && (sp < i+n)) {
+                    const P = G.fromRprLEM(buffLEM, (sp-i)*sG);
+                    singularPoints.push(P);
+                }
+            }
+        }
+
+        await binFileUtils__namespace.endWriteSection(fdTo);
+
+        return singularPoints;
+    }
+
+
+    async function processSectionNoImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName) {
+
+        const G = curve[groupName];
+        const scG = G.F.n8;
+
+        const singularPoints = [];
+
+        const nPointsChunk = Math.floor((1<<24)/scG);
+
+        for (let i=0; i< nPoints; i += nPointsChunk) {
+            if (logger) logger.debug(`Importing ${sectionName}: ${i}/${nPoints}`);
+            const n = Math.min(nPoints-i, nPointsChunk);
+
+            const buffC = await fdFrom.read(n * scG);
+            hasherResponse.update(buffC);
+
+            for (let j=0; j<singularPointIndexes.length; j++) {
+                const sp = singularPointIndexes[j];
+                if ((sp >=i) && (sp < i+n)) {
+                    const P = G.fromRprCompressed(buffC, (sp-i)*scG);
+                    singularPoints.push(P);
+                }
+            }
+        }
+
+        return singularPoints;
+    }
+
+
+    async function hashSection(nextChallengeHasher, fdTo, groupName, sectionId, nPoints, sectionName, logger) {
+
+        const G = curve[groupName];
+        const sG = G.F.n8*2;
+        const nPointsChunk = Math.floor((1<<24)/sG);
+
+        const oldPos = fdTo.pos;
+        fdTo.pos = startSections[sectionId];
+
+        for (let i=0; i< nPoints; i += nPointsChunk) {
+            if (logger) logger.debug(`Hashing ${sectionName}: ${i}/${nPoints}`);
+            const n = Math.min(nPoints-i, nPointsChunk);
+
+            const buffLEM = await fdTo.read(n * sG);
+
+            const buffU = await G.batchLEMtoU(buffLEM);
+
+            nextChallengeHasher.update(buffU);
+        }
+
+        fdTo.pos = oldPos;
+    }
+
+}
+
+/*
+    Copyright 2018 0KIMS association.
+
+    This file is part of snarkJS.
+
+    snarkJS is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    snarkJS is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with snarkJS. If not, see <https://www.gnu.org/licenses/>.
+*/
 const sameRatio$1 = sameRatio$2;
 
 async function verifyContribution(curve, cur, prev, logger) {
@@ -3772,6 +3998,7 @@ var powersoftau = /*#__PURE__*/Object.freeze({
     newAccumulator: newAccumulator,
     exportChallenge: exportChallenge,
     importResponse: importResponse,
+    importResponseNoOrigin: importResponseNoOrigin,
     verify: verify,
     challengeContribute: challengeContribute,
     beacon: beacon$1,
