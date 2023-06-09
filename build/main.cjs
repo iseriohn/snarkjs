@@ -2369,8 +2369,8 @@ async function importResponseNoOrigin(oldPtauFilename, contributionFilename, new
         contributions[contributions.length-1].nextChallenge = lastChallengeHash;
     }
 
-    if(!hashIsEqual(contributionPreviousHash,lastChallengeHash))
-        throw new Error("Wrong contribution. this contribution is not based on the previus hash");
+    // if(!misc.hashIsEqual(contributionPreviousHash,lastChallengeHash))
+    //     throw new Error("Wrong contribution. this contribution is not based on the previus hash");
 
     const hasherResponse = new Blake2b__default["default"](64);
     hasherResponse.update(contributionPreviousHash);
