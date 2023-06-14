@@ -101,18 +101,24 @@ export default async function newZKey(r1csName, ptauName, zkeyName, logger) {
     let bAlpha1;
     bAlpha1 = await fdPTau.read(sG1, sectionsPTau[4][0].p);
     await fdZKey.write(bAlpha1);
+    console.log("bAlpha1");
+    console.log(JSON.stringify(bAlpha1));
     bAlpha1 = await curve.G1.batchLEMtoU(bAlpha1);
     csHasher.update(bAlpha1);
 
     let bBeta1;
     bBeta1 = await fdPTau.read(sG1, sectionsPTau[5][0].p);
     await fdZKey.write(bBeta1);
+    console.log("bBeta1");
+    console.log(JSON.stringify(bBeta1));
     bBeta1 = await curve.G1.batchLEMtoU(bBeta1);
     csHasher.update(bBeta1);
 
     let bBeta2;
     bBeta2 = await fdPTau.read(sG2, sectionsPTau[6][0].p);
     await fdZKey.write(bBeta2);
+    console.log("bBeta2");
+    console.log(JSON.stringify(bBeta2));
     bBeta2 = await curve.G2.batchLEMtoU(bBeta2);
     csHasher.update(bBeta2);
 
@@ -128,6 +134,9 @@ export default async function newZKey(r1csName, ptauName, zkeyName, logger) {
     await fdZKey.write(bg2);        // gamma2
     await fdZKey.write(bg1);        // delta1
     await fdZKey.write(bg2);        // delta2
+    console.log(JSON.stringify(bg2));
+    console.log(JSON.stringify(bg1));
+    console.log(JSON.stringify(bg2));
     csHasher.update(bg2U);      // gamma2
     csHasher.update(bg1U);      // delta1
     csHasher.update(bg2U);      // delta2
@@ -159,15 +168,21 @@ export default async function newZKey(r1csName, ptauName, zkeyName, logger) {
 
     await hashHPoints();
 
+    console.log("C");
     await composeAndWritePoints(8, "G1", C, "C");
+    console.log("A");
     await composeAndWritePoints(5, "G1", A, "A");
+    console.log("B1");
     await composeAndWritePoints(6, "G1", B1, "B1");
+    console.log("B2");
     await composeAndWritePoints(7, "G2", B2, "B2");
 
     const csHash = csHasher.digest();
     // Contributions section
     await startWriteSection(fdZKey, 10);
     await fdZKey.write(csHash);
+    console.log("hash");
+    console.log(JSON.stringify(csHash));
     await fdZKey.writeULE32(0);
     await endWriteSection(fdZKey);
 
@@ -198,6 +213,7 @@ export default async function newZKey(r1csName, ptauName, zkeyName, logger) {
             throw new Error("Circuit too big for this curve");
         }
         await fdZKey.write(buffOut);
+        console.log(JSON.stringify(buffOut));
         await endWriteSection(fdZKey);
     }
 
@@ -316,6 +332,7 @@ export default async function newZKey(r1csName, ptauName, zkeyName, logger) {
         }
 
         await fdZKey.write(buffSection);
+        console.log(JSON.stringify(buffSection));
         await endWriteSection(fdZKey);
 
         function writeCoef(c) {
@@ -371,7 +388,9 @@ export default async function newZKey(r1csName, ptauName, zkeyName, logger) {
 
             for (let k=0; k<result.length; k++) {
                 await fdZKey.write(result[k][0]);
+                console.log(JSON.stringify(result[k][0]));
                 const buff = await G.batchLEMtoU(result[k][0]);
+                console.log(JSON.stringify(buff));
                 csHasher.update(buff);
             }
             opPromises = [];
