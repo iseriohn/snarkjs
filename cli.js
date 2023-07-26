@@ -82,11 +82,18 @@ const commands = [
         action: powersOfTauChallengeContribute
     },
     {
-        cmd: "powersoftau import response <powersoftau_old.ptau> <response> <<powersoftau_new.ptau>",
+        cmd: "powersoftau import response <powersoftau_old.ptau> <response> <powersoftau_new.ptau>",
         description: "import a response to a ptau file",
         alias: ["ptir"],
         options: "-verbose|v -nopoints -nocheck -name|n",
         action: powersOfTauImport
+    },
+    {
+        cmd: "powersoftau import response_no_origin <powersoftau_old.ptau> <response> <powersoftau_new.ptau>",
+        description: "import a response as a ptau file",
+        alias: ["ptirno"],
+        options: "-verbose|v -nopoints -nocheck -name|n",
+        action: powersOfTauImportNoOrigin
     },
     {
         cmd: "powersoftau beacon <old_powersoftau.ptau> <new_powersoftau.ptau> <beaconHash(Hex)> <numIterationsExp>",
@@ -770,6 +777,30 @@ async function powersOfTauImport(params, options) {
     if (options.verbose) Logger.setLogLevel("DEBUG");
 
     const res = await powersOfTau.importResponse(oldPtauName, response, newPtauName, options.name, importPoints, logger);
+
+    if (res) return res;
+    if (!doCheck) return;
+
+    // TODO Verify
+}
+
+async function powersOfTauImportNoOrigin(params, options) {
+    let oldPtauName;
+    let response;
+    let newPtauName;
+    let importPoints = true;
+    let doCheck = true;
+
+    oldPtauName = params[0];
+    response = params[1];
+    newPtauName = params[2];
+
+    if (options.nopoints) importPoints = false;
+    if (options.nocheck) doCheck = false;
+
+    if (options.verbose) Logger.setLogLevel("DEBUG");
+
+    const res = await powersOfTau.importResponseNoOrigin(oldPtauName, response, newPtauName, options.name, importPoints, logger);
 
     if (res) return res;
     if (!doCheck) return;
