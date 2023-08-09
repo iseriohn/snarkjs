@@ -89,7 +89,7 @@ const commands = [
         action: powersOfTauImport
     },
     {
-        cmd: "powersoftau import response_no_origin <powersoftau_old.ptau> <response> <powersoftau_new.ptau>",
+        cmd: "powersoftau import response_no_origin <curve> <power> <response> <powersoftau_new.ptau>",
         description: "import a response as a ptau file",
         alias: ["ptirno"],
         options: "-verbose|v -nopoints -nocheck -name|n",
@@ -785,22 +785,31 @@ async function powersOfTauImport(params, options) {
 }
 
 async function powersOfTauImportNoOrigin(params, options) {
-    let oldPtauName;
+    let curveName;
+    let power;
     let response;
     let newPtauName;
     let importPoints = true;
     let doCheck = true;
 
-    oldPtauName = params[0];
-    response = params[1];
-    newPtauName = params[2];
+    curveName = params[0];
+
+    power = parseInt(params[1]);
+    if ((power<1) || (power>28) || isNaN(power)) {
+        throw new Error("Power must be between 1 and 28");
+    }
+
+    response = params[2];
+    newPtauName = params[3];
 
     if (options.nopoints) importPoints = false;
     if (options.nocheck) doCheck = false;
 
     if (options.verbose) Logger.setLogLevel("DEBUG");
 
-    const res = await powersOfTau.importResponseNoOrigin(oldPtauName, response, newPtauName, options.name, importPoints, logger);
+    const curve = await curves.getCurveFromName(curveName);
+
+    const res = await powersOfTau.importResponseNoOrigin(curve, power, response, newPtauName, options.name, importPoints, logger);
 
     if (res) return res;
     if (!doCheck) return;

@@ -2261,16 +2261,17 @@ async function importResponse(oldPtauFilename, contributionFilename, newPTauFile
     along with snarkJS. If not, see <https://www.gnu.org/licenses/>.
 */
 
-async function importResponseNoOrigin(oldPtauFilename, contributionFilename, newPTauFilename, name, importPoints, logger) {
-
+// This is to import multiple contributions as a whole from the community ppot 
+// on top of the initial ptau file. Mostly the same as powersoftau_import.js
+// except that we don't verify if contributionPreviousHash in community ppot 
+// challenge file matches lastChallengeHash in the ptau file. 
+// Note that the powersoftau_verify won't succeed because multiple contributions 
+// are imported as a whole but the public key is not available. To verify the 
+// new ptau file, however, we can simply do a bellman export and compare it 
+// with the original challenge file.
+async function importResponseNoOrigin(curve, power, contributionFilename, newPTauFilename, name, importPoints, logger) {
     await Blake2b__default["default"].ready();
 
-    const noHash = new Uint8Array(64);
-    for (let i=0; i<64; i++) noHash[i] = 0xFF;
-
-    const {fd: fdOld, sections} = await binFileUtils__namespace.readBinFile(oldPtauFilename, "ptau", 1);
-    const {curve, power} = await readPTauHeader(fdOld, sections);
-    const contributions = await readContributions(fdOld, curve, sections);
     const currentContribution = {};
 
     if (name) currentContribution.name = name;
@@ -2292,31 +2293,10 @@ async function importResponseNoOrigin(oldPtauFilename, contributionFilename, new
         sG1*6 + sG2*3)
         throw new Error("Size of the contribution is invalid");
 
-    let lastChallengeHash;
-
-    if (contributions.length>0) {
-        lastChallengeHash = contributions[contributions.length-1].nextChallenge;
-    } else {
-        lastChallengeHash = calculateFirstChallengeHash(curve, power, logger);
-    }
-
     const fdNew = await binFileUtils__namespace.createBinFile(newPTauFilename, "ptau", 1, importPoints ? 7: 2);
     await writePTauHeader(fdNew, curve, power);
 
     const contributionPreviousHash = await fdResponse.read(64);
-
-    if (hashIsEqual(noHash,lastChallengeHash)) {
-        lastChallengeHash = contributionPreviousHash;
-        contributions[contributions.length-1].nextChallenge = lastChallengeHash;
-    }
-
-    // This is to import multiple contributions as a whole from the community ppot 
-    // on top of the initial ptau file, so contributionPreviousHash in community 
-    // ppot challenge file doesn't match lastChallengeHash in the ptau file. 
-    // TODO: remove the initial ptau file in the function input but generate it 
-    // deterministically within this function.
-    // if(!misc.hashIsEqual(contributionPreviousHash,lastChallengeHash))
-    //     throw new Error("Wrong contribution. this contribution is not based on the previus hash");
 
     const hasherResponse = new Blake2b__default["default"](64);
     hasherResponse.update(contributionPreviousHash);
@@ -2363,13 +2343,12 @@ async function importResponseNoOrigin(oldPtauFilename, contributionFilename, new
         currentContribution.nextChallenge = noHash;
     }
 
-    contributions.push(currentContribution);
+    const contributions = [currentContribution];
 
     await writeContributions(fdNew, curve, contributions);
 
     await fdResponse.close();
     await fdNew.close();
-    await fdOld.close();
 
     return currentContribution.nextChallenge;
 
