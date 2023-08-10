@@ -784,6 +784,19 @@ async function powersOfTauImport(params, options) {
     // TODO Verify
 }
 
+/**
+ * This is to import multiple contributions as a whole from the community ppot 
+ * on top of the initial ptau file. Mostly the same as function powersOfTauImport
+ * except that we don't need the old ptau file name in cli pamameters. 
+ * 
+ * Note that the resulting new ptau file won't pass powersOfTauVerify because 
+ * multiple contributions are imported as a whole but the public key is not available. 
+ * To verify the new ptau file, however, we can simply do a bellman export and compare it 
+ * with the original challenge file.
+ *
+ * @param {String[]} params - cli parameters
+ * @param {Object} options - cli options
+ */
 async function powersOfTauImportNoOrigin(params, options) {
     let curveName;
     let power;
@@ -813,8 +826,6 @@ async function powersOfTauImportNoOrigin(params, options) {
 
     if (res) return res;
     if (!doCheck) return;
-
-    // TODO Verify
 }
 
 async function powersOfTauVerify(params, options) {

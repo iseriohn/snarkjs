@@ -2261,16 +2261,30 @@ async function importResponse(oldPtauFilename, contributionFilename, newPTauFile
     along with snarkJS. If not, see <https://www.gnu.org/licenses/>.
 */
 
-// This is to import multiple contributions as a whole from the community ppot 
-// on top of the initial ptau file. Mostly the same as powersoftau_import.js
-// except that we don't verify if contributionPreviousHash in community ppot 
-// challenge file matches lastChallengeHash in the ptau file. 
-// Note that the powersoftau_verify won't succeed because multiple contributions 
-// are imported as a whole but the public key is not available. To verify the 
-// new ptau file, however, we can simply do a bellman export and compare it 
-// with the original challenge file.
+/**
+ * This is to import multiple contributions as a whole from the community ppot 
+ * on top of the initial ptau file. Mostly the same as src/powersoftau_import.js
+ * except that we don't need oldPtauName and don't verify if contributionPreviousHash 
+ * in community ppot challenge file matches lastChallengeHash in the ptau file. 
+ * 
+ * Note that the powersoftau_verify won't succeed because multiple contributions 
+ * are imported as a whole but the public key is not available. To verify the 
+ * new ptau file, however, we can simply do a bellman export and compare it 
+ * with the original challenge file.
+ *
+ * @param {Object} curve - type of curve
+ * @param {Number} power - circuit size exponent (support circuit size of at most 2^power), should be within range [1, 28]
+ * @param {String} contributionFilename - name of the imported response file
+ * @param {String} newPTauFilename - name of the new ptau file
+ * @param {(String|null)} name - name of the contribution
+ * @param {Boolean} importPoints - write imported ptau points into the new ptau file if true, otherwise only write contributions
+ * @param {Object|null} logger - logplease logger for js
+ */
 async function importResponseNoOrigin(curve, power, contributionFilename, newPTauFilename, name, importPoints, logger) {
     await Blake2b__default["default"].ready();
+
+    const noHash = new Uint8Array(64);
+    for (let i=0; i<64; i++) noHash[i] = 0xFF;
 
     const currentContribution = {};
 
@@ -2352,6 +2366,18 @@ async function importResponseNoOrigin(curve, power, contributionFilename, newPTa
 
     return currentContribution.nextChallenge;
 
+    /**
+     * This is to import each section in ptau file. 
+     * Exactly the same as that in src/powersoftau_import.js. 
+     *
+     * @param {Object} fdFrom - response to be imported
+     * @param {Object} fdTo - new ptau file
+     * @param {String} groupName - group name (i.e., G1 or G2)
+     * @param {Number} sectionId - section number in ptau file
+     * @param {number} nPoints - number of points in the section
+     * @param {Number[]} singularPointIndexes - indexes of ptaus to be returned (i.e., [1] for TauG1 and TauG2; [0] for AlphaG1, BetaG1, and BetaG2)
+     * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
+     */
     async function processSection(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName) {
         if (importPoints) {
             return await processSectionImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName);
@@ -2360,6 +2386,18 @@ async function importResponseNoOrigin(curve, power, contributionFilename, newPTa
         }
     }
 
+    /**
+     * This is to import each section in ptau file while writing the points to the new ptau file. 
+     * Exactly the same as that in src/powersoftau_import.js. 
+     *
+     * @param {Object} fdFrom - response to be imported
+     * @param {Object} fdTo - new ptau file
+     * @param {String} groupName - group name (i.e., G1 or G2)
+     * @param {Number} sectionId - section number in ptau file
+     * @param {number} nPoints - number of points in the section
+     * @param {Number[]} singularPointIndexes - indexes of ptaus to be returned (i.e., [1] for TauG1 and TauG2; [0] for AlphaG1, BetaG1, and BetaG2)
+     * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
+     */
     async function processSectionImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName) {
 
         const G = curve[groupName];
@@ -2397,7 +2435,18 @@ async function importResponseNoOrigin(curve, power, contributionFilename, newPTa
         return singularPoints;
     }
 
-
+    /**
+     * This is to import each section in ptau file without writing the points to the new ptau file. 
+     * Exactly the same as that in src/powersoftau_import.js. 
+     *
+     * @param {Object} fdFrom - response to be imported
+     * @param {Object} fdTo - new ptau file
+     * @param {String} groupName - group name (i.e., G1 or G2)
+     * @param {Number} sectionId - section number in ptau file
+     * @param {number} nPoints - number of points in the section
+     * @param {Number[]} singularPointIndexes - indexes of ptaus to be returned (i.e., [1] for TauG1 and TauG2; [0] for AlphaG1, BetaG1, and BetaG2)
+     * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
+     */
     async function processSectionNoImportPoints(fdFrom, fdTo, groupName, sectionId, nPoints, singularPointIndexes, sectionName) {
 
         const G = curve[groupName];
@@ -2426,7 +2475,18 @@ async function importResponseNoOrigin(curve, power, contributionFilename, newPTa
         return singularPoints;
     }
 
-
+    /**
+     * This is to compute the hash for the next challenge. 
+     * Exactly the same as that in src/powersoftau_import.js. 
+     *
+     * @param {Object} nextChallengeHasher - challenge hasher
+     * @param {Object} fdTo - new ptau file
+     * @param {String} groupName - group name (i.e., G1 or G2)
+     * @param {Number} sectionId - section number in ptau file
+     * @param {number} nPoints - number of points in the section
+     * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
+     * @param {Object|null} logger - logplease logger for js
+     */
     async function hashSection(nextChallengeHasher, fdTo, groupName, sectionId, nPoints, sectionName, logger) {
 
         const G = curve[groupName];
