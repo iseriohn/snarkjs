@@ -796,6 +796,8 @@ async function powersOfTauImport(params, options) {
  *
  * @param {String[]} params - cli parameters
  * @param {Object} options - cli options
+ * @param {Boolean|null} options.nopoints - write imported ptau points into the new ptau file if true, otherwise only write contributions
+ * @param {Boolean|null} options.verbose - print debug logs if true
  */
 async function powersOfTauImportNoOrigin(params, options) {
     let curveName;
@@ -803,7 +805,6 @@ async function powersOfTauImportNoOrigin(params, options) {
     let response;
     let newPtauName;
     let importPoints = true;
-    let doCheck = true;
 
     curveName = params[0];
 
@@ -816,16 +817,14 @@ async function powersOfTauImportNoOrigin(params, options) {
     newPtauName = params[3];
 
     if (options.nopoints) importPoints = false;
-    if (options.nocheck) doCheck = false;
 
     if (options.verbose) Logger.setLogLevel("DEBUG");
 
     const curve = await curves.getCurveFromName(curveName);
 
-    const res = await powersOfTau.importResponseNoOrigin(curve, power, response, newPtauName, options.name, importPoints, logger);
+    const res = await powersOfTau.importResponseNoOrigin(curve, power, response, newPtauName, importPoints, logger);
 
     if (res) return res;
-    if (!doCheck) return;
 }
 
 async function powersOfTauVerify(params, options) {

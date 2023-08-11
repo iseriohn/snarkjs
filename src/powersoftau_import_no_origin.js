@@ -30,23 +30,21 @@ import * as misc from "./misc.js";
  * new ptau file, however, we can simply do a bellman export and compare it 
  * with the original challenge file.
  *
- * @param {Object} curve - type of curve
+ * @param {Object} curve - curve engine built from ffjavascript (e.g., buildBn128() for bn128)
  * @param {Number} power - circuit size exponent (support circuit size of at most 2^power), should be within range [1, 28]
  * @param {String} contributionFilename - name of the imported response file
  * @param {String} newPTauFilename - name of the new ptau file
  * @param {(String|null)} name - name of the contribution
  * @param {Boolean} importPoints - write imported ptau points into the new ptau file if true, otherwise only write contributions
- * @param {Object|null} logger - logplease logger for js
+ * @param {Object|null} logger - logplease logger for js (e.g., logger.info() for info logs and logger.debug() for debug logs)
  */
-export default async function importResponseNoOrigin(curve, power, contributionFilename, newPTauFilename, name, importPoints, logger) {
+export default async function importResponseNoOrigin(curve, power, contributionFilename, newPTauFilename, importPoints, logger) {
     await Blake2b.ready();
 
     const noHash = new Uint8Array(64);
     for (let i=0; i<64; i++) noHash[i] = 0xFF;
 
     const currentContribution = {};
-
-    if (name) currentContribution.name = name;
 
     const sG1 = curve.F1.n8*2;
     const scG1 = curve.F1.n8; // Compresed size
@@ -128,11 +126,11 @@ export default async function importResponseNoOrigin(curve, power, contributionF
      * This is to import each section in ptau file. 
      * Exactly the same as that in src/powersoftau_import.js. 
      *
-     * @param {Object} fdFrom - response to be imported
-     * @param {Object} fdTo - new ptau file
+     * @param {Object} fdFrom - Memfile object (from fastfile) for the response to be imported
+     * @param {Object} fdTo - Memfile object (from fastfile) for the new ptau file
      * @param {String} groupName - group name (i.e., G1 or G2)
      * @param {Number} sectionId - section number in ptau file
-     * @param {number} nPoints - number of points in the section
+     * @param {Number} nPoints - number of points in the section
      * @param {Number[]} singularPointIndexes - indexes of ptaus to be returned (i.e., [1] for TauG1 and TauG2; [0] for AlphaG1, BetaG1, and BetaG2)
      * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
      */
@@ -148,11 +146,11 @@ export default async function importResponseNoOrigin(curve, power, contributionF
      * This is to import each section in ptau file while writing the points to the new ptau file. 
      * Exactly the same as that in src/powersoftau_import.js. 
      *
-     * @param {Object} fdFrom - response to be imported
-     * @param {Object} fdTo - new ptau file
+     * @param {Object} fdFrom - Memfile object (from fastfile) for the response to be imported
+     * @param {Object} fdTo - Memfile object (from fastfile) for the new ptau file
      * @param {String} groupName - group name (i.e., G1 or G2)
      * @param {Number} sectionId - section number in ptau file
-     * @param {number} nPoints - number of points in the section
+     * @param {Number} nPoints - number of points in the section
      * @param {Number[]} singularPointIndexes - indexes of ptaus to be returned (i.e., [1] for TauG1 and TauG2; [0] for AlphaG1, BetaG1, and BetaG2)
      * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
      */
@@ -197,11 +195,11 @@ export default async function importResponseNoOrigin(curve, power, contributionF
      * This is to import each section in ptau file without writing the points to the new ptau file. 
      * Exactly the same as that in src/powersoftau_import.js. 
      *
-     * @param {Object} fdFrom - response to be imported
-     * @param {Object} fdTo - new ptau file
+     * @param {Object} fdFrom - Memfile object (from fastfile) for the response to be imported
+     * @param {Object} fdTo - Memfile object (from fastfile) for the new ptau file
      * @param {String} groupName - group name (i.e., G1 or G2)
      * @param {Number} sectionId - section number in ptau file
-     * @param {number} nPoints - number of points in the section
+     * @param {Number} nPoints - number of points in the section
      * @param {Number[]} singularPointIndexes - indexes of ptaus to be returned (i.e., [1] for TauG1 and TauG2; [0] for AlphaG1, BetaG1, and BetaG2)
      * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
      */
@@ -237,13 +235,13 @@ export default async function importResponseNoOrigin(curve, power, contributionF
      * This is to compute the hash for the next challenge. 
      * Exactly the same as that in src/powersoftau_import.js. 
      *
-     * @param {Object} nextChallengeHasher - challenge hasher
-     * @param {Object} fdTo - new ptau file
+     * @param {Object} nextChallengeHasher - Blake2b hasher for the next challenge (e.g., hasher.update() to append the hash input, hasher.digest() to compute the hash)
+     * @param {Object} fdTo - Memfile object (from fastfile) for the new ptau file
      * @param {String} groupName - group name (i.e., G1 or G2)
      * @param {Number} sectionId - section number in ptau file
      * @param {number} nPoints - number of points in the section
      * @param {String} sectionName - type of powers of tau (i.e., TauG1, TauG2, AlphaTauG1, BetaTauG1, or BetaG2)
-     * @param {Object|null} logger - logplease logger for js
+     * @param {Object|null} logger - logplease logger for js (e.g., logger.info() for info logs and logger.debug() for debug logs)
      */
     async function hashSection(nextChallengeHasher, fdTo, groupName, sectionId, nPoints, sectionName, logger) {
 
